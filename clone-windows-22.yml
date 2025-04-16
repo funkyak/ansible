@@ -1,9 +1,10 @@
 ---
 - hosts: proxmox
   vars:
-    name: windows-server
+    vm_name: windows-server
     newid : 504
     vmid: 801
+    network_bridge: vmbr20
 
   tasks:
     - name: Clone Windows Server 2022 template
@@ -11,7 +12,7 @@
         node: rsvr5
         vmid: "{{ vmid }}"
         newid: "{{ newid }}"
-        name: "{{ name }}"
+        name: "{{ vm_name }}"
         clone: windows_server-22
         net: '{"net0":"virtio,bridge=vmbr2"}'
         api_user: "{{ api_user }}"
@@ -35,7 +36,7 @@
         api_host: "{{ api_host }}"
         vmid: "{{ newid }}"
         interface: net0
-        bridge: vmbr20
+        bridge: "{{ network_bridge }}"
         mac: "12:34:56:C0:FF:EE"
         model: e1000
         firewall: true
