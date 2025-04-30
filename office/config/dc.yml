@@ -1,0 +1,92 @@
+---
+- name: Promote Windows Server to Domain Controller and Configure DNS
+  hosts: dc
+  vars:
+    ansible_user: "Administrator"
+    ansible_password: "passw0rd!"
+    ansible_connection: winrm
+    ansible_winrm_transport: ntlm
+    ansible_winrm_server_cert_validation: ignore
+    domain_name: "office.uk"
+    new_hostname: "DC01"
+    dns_ip: "14.0.1.1"
+    safe_mode_password: "{{ ansible_password }}"
+    dhcp_start_ip: "14.0.2.10"
+    dhcp_end_ip: "14.0.2.100"
+    dhcp_subnet_mask: "255.255.255.0"
+    dhcp_default_gateway: "14.0.2.254"
+
+  tasks:
+    - name: Rename computer to DC01
+      ansible.windows.win_hostname:
+        name: "{{ new_hostname }}"
+      register: rename_result
+
+    - name: Reboot after hostname change (if needed)
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
+      when: rename_result.reboot_required
+
+    - name: Install AD-Domain-Services feature
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        include_management_tools: yes
+        state: present
+
+    - name: Promote to Domain Controller and create new forest
+      microsoft.ad.domain:
+        dns_domain_name: "{{ domain_name }}"
+        safe_mode_password: "{{ safe_mode_password }}"
+        domain_netbios_name: "OFFICE"
+        forest_mode: "Win2012R2"  # Using appropriate forest mode
+        install_dns: yes
+        sysvol_path: "C:\\Windows\\SYSVOL"
+        database_path: "C:\\Windows\\NTDS"
+        reboot: yes
+        domain_mode: "Win2012R2"  # Set to a supported domain mode like "Win2012R2"
+      register: domain_promotion
+
+    - name: Reboot after domain controller promotion
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
+      when: domain_promotion.reboot_required
+
+    - name: Install DNS Server role
+      ansible.windows.win_feature:
+        name: DNS
+        state: present
+
+    - name: Add A record for office.uk to 14.0.1.1
+      ansible.windows.win_powershell:
+        script: |
+          $zoneName = "office.uk"
+          $recordName = "office"
+          $ipAddress = "14.0.1.1"
+          Add-DnsServerResourceRecordA -Name $recordName -ZoneName $zoneName -IPv4Address $ipAddress
+          Add-DnsServerResourceRecordPtr -Name $recordName -ZoneName "$ipAddress.in-addr.arpa" -PtrDomainName "$zoneName"
+
+#Need to test the config of DHCP 
+#If this works I will add it to the warehouse dc
+    - name: Install DHCP Server role
+      ansible.windows.win_feature:
+        name: DHCP
+        state: present
+
+    - name: Configure DHCP Server
+      ansible.windows.win_dhcp_server:
+        name: "DHCP"
+        state: present
+
+    - name: Set DHCP Scope
+      ansible.windows.win_dhcp_scope:
+        name: "Scope01"
+        start_range: "{{ dhcp_start_ip }}"
+        end_range: "{{ dhcp_end_ip }}"
+        subnet_mask: "{{ dhcp_subnet_mask }}"
+        default_gateway: "{{ dhcp_default_gateway }}"
+        state: present
+
+    - name: Authorize DHCP Server
+      ansible.windows.win_dhcp_server:
+        name: "DHCP"
+        state: authorized

@@ -1,0 +1,91 @@
+---
+- name: Configure FS01 Join Domain, Create Shared Drive "Threat Level Midnight"
+  hosts: fs
+  vars:
+    domain_name: "office.uk"
+    domain_admin_user: "Administrator"
+    domain_admin_password: "passw0rd!"
+    shared_drive_letter: "Z:"
+    shared_folder_name: "Threat Level Midnight"
+    shared_folder_path: "C:\\{{ shared_folder_name }}"
+    domain_combined: "OFFICE\\Administrator"
+    domain_users_group: "OFFICE\\Domain Users"
+
+  tasks:
+    - name: Ensure File and Printer Sharing is enabled on the machine
+      ansible.windows.win_service:
+        name: "LanmanServer"
+        start_mode: "auto"
+        state: "started"
+
+    - name: Rename computer to FS01
+      ansible.windows.win_hostname:
+        name: "FS01"
+      register: rename_result
+
+    - name: Reboot after hostname change if needed
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
+      when: rename_result.reboot_required
+
+    - name: Join the machine to the domain office.uk
+      microsoft.ad.membership:
+        dns_domain_name: "{{ domain_name }}"
+        hostname: "FS01"
+        domain_admin_user: "{{ domain_combined }}"
+        domain_admin_password: "{{ domain_admin_password }}"
+        state: domain
+        reboot: yes
+
+    - name: Create shared folder "Threat Level Midnight"
+      ansible.windows.win_file:
+        path: "{{ shared_folder_path }}"
+        state: directory
+
+    - name: Share folder "Threat Level Midnight" on the network
+      ansible.windows.win_share:
+        name: "{{ shared_folder_name }}"
+        path: "{{ shared_folder_path }}"
+        description: "Shared folder for Threat Level Midnight use"
+        full_access:
+          - "{{ domain_users_group }}"  # Granting access to Domain Users
+        state: present
+
+    - name: Set NTFS permissions for Domain Users
+      ansible.windows.win_acl:
+        path: "{{ shared_folder_path }}"
+        user: "{{ domain_users_group }}"
+        rights: FullControl
+        type: allow
+        state: present
+
+    - name: Ensure the shared folder is accessible
+      ansible.windows.win_command:
+        cmd: "net share"
+      register: share_result
+
+    - name: Ensure Domain Users have share-level Full Control access
+      ansible.windows.win_share:
+        name: "{{ shared_folder_name }}"
+        path: "{{ shared_folder_path }}"
+        description: "Shared folder for Threat Level Midnight use"
+        full_access:
+          - "{{ domain_users_group }}"
+        state: present
+
+    - name: Create PowerShell script to grant SMB share access
+      ansible.windows.win_copy:
+        content: |
+          Grant-SmbShareAccess -Name "Threat Level Midnight" -AccountName "OFFICE\Domain Users" -AccessRight Full -Force
+          Grant-SmbShareAccess -Name "Threat Level Midnight" -AccountName "everyone" -AccessRight Full -Force
+        dest: C:\Threat Level Midnight\grant-access.ps1
+
+    - name: Run the PowerShell script
+      ansible.windows.win_powershell:
+        script: C:\Threat Level Midnight\grant-access.ps1
+      register: grant_result
+
+    - name: Delete the PowerShell script after execution
+      ansible.windows.win_file:
+        path: C:\Threat Level Midnight\grant-access.ps1
+        state: absent
