@@ -1,0 +1,61 @@
+---
+- name: Add network bridges to Proxmox
+  hosts: proxmox
+  become: yes
+  vars:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    proxmox_node: "{{ proxmox_node }}"
+
+  tasks:
+  #Server
+    - name: Add vmbr20 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr20"
+        block: |
+          auto vmbr20
+          iface vmbr20 inet static
+          address 15.0.1.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+  #WKS
+    - name: Add vmbr21 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr21"
+        block: |
+          auto vmbr21
+          iface vmbr21 inet static
+          address 15.0.2.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+  #DMZ INT
+    - name: Add vmbr22 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr22"
+        block: |
+          auto vmbr22
+          iface vmbr22 inet static
+          address 15.0.3.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+  #DMZ OUT
+    - name: Add vmbr23 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr23"
+        block: |
+          auto vmbr23
+          iface vmbr22 inet static
+          address 15.0.4.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+
+    - name: Restart networking on Proxmox
+      systemd:
+        name: networking
+        state: restarted
