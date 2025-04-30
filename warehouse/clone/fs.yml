@@ -1,0 +1,56 @@
+---
+- hosts: proxmox
+  vars:
+    vm_name: warehouse-fs01
+    newid: 502
+    vmid: 801
+    network_bridge: vmbr20
+
+  tasks:
+
+    - name: Clone Windows Server 2022 template
+      community.general.proxmox_kvm:
+        node: rsvr5
+        vmid: "{{ vmid }}"
+        newid: "{{ newid }}"
+        name: "{{ vm_name }}"
+        clone: windows_server-22
+        net: '{"net0":"virtio,bridge=vmbr2"}'
+        api_user: "{{ api_user }}"
+        api_token_id: "{{ proxmox_token_id }}"
+        api_token_secret: "{{ proxmox_token_secret }}"
+        api_host: "{{ api_host }}"
+        storage: ISO
+        timeout: 90
+        full: yes
+        state: present
+
+    - name: Wait for a few seconds after cloning
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Create NIC net0 with random MAC address
+      community.general.proxmox_nic:
+        api_user: "{{ api_user }}"
+        api_token_id: "{{ proxmox_token_id }}"
+        api_token_secret: "{{ proxmox_token_secret }}"
+        api_host: "{{ api_host }}"
+        vmid: "{{ newid }}"
+        interface: net0
+        bridge: "{{ network_bridge }}"
+        model: e1000
+        firewall: true
+
+    - name: Wait for a few seconds after NIC creation
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Start the cloned Windows Server VM
+      community.general.proxmox_kvm:
+        node: rsvr5
+        vmid: "{{ newid }}"
+        api_user: "{{ api_user }}"
+        api_token_id: "{{ proxmox_token_id }}"
+        api_token_secret: "{{ proxmox_token_secret }}"
+        api_host: "{{ api_host }}"
+        state: started
