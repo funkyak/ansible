@@ -11,10 +11,8 @@
     new_hostname: "DC01"
     dns_ip: "14.0.1.1"
     safe_mode_password: "{{ ansible_password }}"
-    dhcp_start_ip: "14.0.2.10"
-    dhcp_end_ip: "14.0.2.100"
-    dhcp_subnet_mask: "255.255.255.0"
-    dhcp_default_gateway: "14.0.2.254"
+
+
 
   tasks:
     - name: Rename computer to DC01
@@ -65,28 +63,4 @@
           Add-DnsServerResourceRecordA -Name $recordName -ZoneName $zoneName -IPv4Address $ipAddress
           Add-DnsServerResourceRecordPtr -Name $recordName -ZoneName "$ipAddress.in-addr.arpa" -PtrDomainName "$zoneName"
 
-#Need to test the config of DHCP 
-#If this works I will add it to the warehouse dc
-    - name: Install DHCP Server role
-      ansible.windows.win_feature:
-        name: DHCP
-        state: present
 
-    - name: Configure DHCP Server
-      ansible.windows.win_dhcp_server:
-        name: "DHCP"
-        state: present
-
-    - name: Set DHCP Scope
-      ansible.windows.win_dhcp_scope:
-        name: "Scope01"
-        start_range: "{{ dhcp_start_ip }}"
-        end_range: "{{ dhcp_end_ip }}"
-        subnet_mask: "{{ dhcp_subnet_mask }}"
-        default_gateway: "{{ dhcp_default_gateway }}"
-        state: present
-
-    - name: Authorize DHCP Server
-      ansible.windows.win_dhcp_server:
-        name: "DHCP"
-        state: authorized

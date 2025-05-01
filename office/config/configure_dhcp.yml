@@ -1,0 +1,60 @@
+---
+- name: Install and Configure DHCP Server on Windows
+  hosts: dc
+  vars:
+    ansible_user: "Administrator"
+    ansible_password: "passw0rd!"
+    ansible_connection: winrm
+    ansible_winrm_transport: ntlm
+    ansible_winrm_server_cert_validation: ignore
+
+    dhcp_start_ip: "14.0.2.10"
+    dhcp_end_ip: "14.0.2.100"
+    dhcp_subnet_mask: "255.255.255.0"
+    dhcp_default_gateway: "14.0.2.254"
+    dhcp_scope_name: "Scope01"
+    dhcp_scope_subnet: "14.0.2.0"
+    dhcp_scope_description: "Main Office DHCP Scope"
+    dhcp_script_path: "C:\\Configure-DHCP.ps1"
+
+  tasks:
+
+    - name: Write PowerShell DHCP configuration script to C
+      ansible.windows.win_copy:
+        dest: "{{ dhcp_script_path }}"
+        content: |
+          $DhcpStartIp = "{{ dhcp_start_ip }}"
+          $DhcpEndIp = "{{ dhcp_end_ip }}"
+          $DhcpSubnetMask = "{{ dhcp_subnet_mask }}"
+          $DhcpDefaultGateway = "{{ dhcp_default_gateway }}"
+          $ScopeName = "{{ dhcp_scope_name }}"
+          $ScopeSubnet = "{{ dhcp_scope_subnet }}"
+          $ScopeDescription = "{{ dhcp_scope_description }}"
+
+          if (-not (Get-WindowsFeature -Name DHCP).Installed) {
+              Install-WindowsFeature -Name 'DHCP' -IncludeManagementTools
+          }
+
+          if (-not (Get-DhcpServerv4Scope | Where-Object { $_.Name -eq $ScopeName })) {
+              Add-DhcpServerv4Scope -Name $ScopeName `
+                  -StartRange $DhcpStartIp `
+                  -EndRange $DhcpEndIp `
+                  -SubnetMask $DhcpSubnetMask `
+                  -Description $ScopeDescription
+          }
+
+          $routerOption = Get-DhcpServerv4OptionValue -ScopeId $ScopeSubnet -OptionId 3 -ErrorAction SilentlyContinue
+          if (-not $routerOption) {
+              Set-DhcpServerv4OptionValue -ScopeId $ScopeSubnet -Router $DhcpDefaultGateway
+          }
+
+          $hostname = (Get-WmiObject Win32_ComputerSystem).Name
+          $ipAddress = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -notlike "*Loopback*"} | Select-Object -First 1 -ExpandProperty IPAddress)
+          $authorized = Get-DhcpServerInDC | Where-Object { $_.DnsName -eq $hostname }
+          if (-not $authorized) {
+              Add-DhcpServerInDC -DnsName $hostname -IpAddress $ipAddress
+          }
+
+
+    - name: Run DHCP setup PowerShell script
+      ansible.windows.win_shell: powershell.exe -ExecutionPolicy Bypass -File "{{ dhcp_script_path }}"

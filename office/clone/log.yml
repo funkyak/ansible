@@ -2,7 +2,7 @@
 - hosts: proxmox
   vars:
     vm_name: office-log01
-    newid: 
+    newid: 604
     vmid: 801
     network_bridge: vmbr30
 

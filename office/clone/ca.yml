@@ -1,8 +1,8 @@
 ---
 - hosts: proxmox
   vars:
-    vm_name: office-fs01
-    newid: 
+    vm_name: office-ca01
+    newid: 603
     vmid: 801
     network_bridge: vmbr30
 

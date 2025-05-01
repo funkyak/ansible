@@ -2,7 +2,7 @@
 - hosts: proxmox
   vars:
     vm_name: office-dc01
-    newid: 
+    newid: 600
     vmid: 801
     network_bridge: vmbr30
 
