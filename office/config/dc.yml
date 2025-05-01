@@ -19,6 +19,7 @@
     dhcp_scope_subnet: "14.0.2.0"
     dhcp_scope_description: "Main Office DHCP Scope"
     dhcp_script_path: "C:\\Configure-DHCP.ps1"
+    mapdrive_script_path: "C:\\Configure-mapdrive.ps1"
 
   tasks:
     - name: Rename computer to DC01
@@ -111,4 +112,56 @@
     - name: Delete the PowerShell script after execution
       ansible.windows.win_file:
         path: "{{ dhcp_script_path }}"
+        state: absent
+
+    - name: Write PowerShell GPO mapping network drive script to C drive
+      ansible.windows.win_copy:
+        dest: "{{ mapdrive_script_path }}"
+        content: |
+          # Import the GroupPolicy module (if not already imported)
+          Import-Module GroupPolicy
+
+          # Set variables
+          $gpoName = "Map X Drive"
+          $driveLetter = "X:"
+          $sharePath = "\\fs01\Threat Level Midnight"
+          $domainDN = (Get-ADDomain).DistinguishedName
+
+          # Create the GPO
+          $gpo = New-GPO -Name $gpoName -ErrorAction Stop
+
+          # Link the GPO to the domain so it applies to all users
+          New-GPLink -Name $gpoName -Target "DC=$($domainDN -replace ',',',DC=')" -LinkEnabled Yes
+
+          # Define the drive mapping XML
+          $xml = @'
+          <?xml version="1.0" encoding="utf-8"?>
+          <DriveMaps clsid="{5794DAFD-BE60-433f-88A2-1A31939AC01F}">
+            <DriveMap>
+              <Properties action="U" thisDrive="X" userName="" path="\\fs01\Threat Level Midnight" label="Threat Level Midnight" 
+                          reconnect="1" useLetter="1" hideRestore="0" 
+                          letter="X" newDriveLetter="X" 
+                          persistent="1" 
+                          showAction="replace" />
+              <Filters />
+            </DriveMap>
+          </DriveMaps>
+          '@
+
+                    # Convert XML to required file structure
+                    $tempPath = "$env:TEMP\DriveMap.xml"
+                    $xml | Out-File -Encoding UTF8 $tempPath
+
+                    # Set the preference item in the GPO using LGPO COM interface
+                    $gpoPath = "\\$env:USERDOMAIN\SysVol\$env:USERDOMAIN\Policies\{$($gpo.Id)}\User\Preferences\Drives"
+                    New-Item -Path $gpoPath -ItemType Directory -Force
+                    Copy-Item -Path $tempPath -Destination "$gpoPath\Drivemap.xml"
+
+
+    - name: Run GPO mapping network drive PowerShell script
+      ansible.windows.win_shell: powershell.exe -ExecutionPolicy Bypass -File "{{ mapdrive_script_path }}"
+
+    - name: Delete the PowerShell script after execution
+      ansible.windows.win_file:
+        path: "{{ mapdrive_script_path }}"
         state: absent

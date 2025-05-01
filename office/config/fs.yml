@@ -59,11 +59,6 @@
         type: allow
         state: present
 
-    - name: Ensure the shared folder is accessible
-      ansible.windows.win_command:
-        cmd: "net share"
-      register: share_result
-
     - name: Ensure Domain Users have share-level Full Control access
       ansible.windows.win_share:
         name: "{{ shared_folder_name }}"
@@ -73,19 +68,8 @@
           - "{{ domain_users_group }}"
         state: present
 
-    - name: Create PowerShell script to grant SMB share access
-      ansible.windows.win_copy:
-        content: |
-          Grant-SmbShareAccess -Name "Threat Level Midnight" -AccountName "OFFICE\Domain Users" -AccessRight Full -Force
-          Grant-SmbShareAccess -Name "Threat Level Midnight" -AccountName "everyone" -AccessRight Full -Force
-        dest: C:\Threat Level Midnight\grant-access.ps1
-
-    - name: Run the PowerShell script
+    - name: Grant SMB share access directly
       ansible.windows.win_powershell:
-        script: C:\Threat Level Midnight\grant-access.ps1
-      register: grant_result
+        script: |
+          Grant-SmbShareAccess -Name "Threat Level Midnight" -AccountName "Everyone" -AccessRight Full -Force
 
-    - name: Delete the PowerShell script after execution
-      ansible.windows.win_file:
-        path: C:\Threat Level Midnight\grant-access.ps1
-        state: absent
