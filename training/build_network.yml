@@ -1,0 +1,51 @@
+---
+- name: Add network bridges to Proxmox
+  hosts: proxmox
+  become: yes
+  vars:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    proxmox_node: "{{ proxmox_node }}"
+
+  tasks:
+  #Server
+    - name: Add vmbr40 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr40"
+        block: |
+          auto vmbr40
+          iface vmbr40 inet static
+          address 10.0.1.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+  #WKS
+    - name: Add vmbr41 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr41"
+        block: |
+          auto vmbr41
+          iface vmbr41 inet static
+          address 10.0.2.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+  #RED
+    - name: Add vmbr42 block
+      blockinfile:
+        path: /etc/network/interfaces
+        marker: "# {mark} ANSIBLE vmbr42"
+        block: |
+          auto vmbr42
+          iface vmbr42 inet static
+          address 10.0.3.0/24
+          netmask 255.255.255.0
+          bridge_ports none
+
+
+    - name: Restart networking on Proxmox
+      systemd:
+        name: networking
+        state: restarted
